@@ -204,6 +204,7 @@ class UNet(_BaseModel):
         :param mask: A mask or list of masks
         :return: the output of the classifier layer
         """
+
         x = self.dropout_in(inputs)
 
         # downsampling
@@ -228,6 +229,7 @@ class UNet(_BaseModel):
 
         :return: this thing unfortunately differs
         """
+
         # downsampling layers
         ds_blocks = []
         ds_pools = []
@@ -990,6 +992,22 @@ def create_model(model, nr_classes, nr_bands, tensor_shape,
         loss = categorical_dice
     elif loss == 'tversky':
         loss = lambda gt, p: categorical_tversky(gt, p, alpha, beta)
+    elif loss == 'CategoricalCrossentropy':
+        loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
+    elif loss == 'SparseCategoricalCrossentropy':
+        loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+
+    # optimizer
+    # Many models train better if you gradually reduce the learning rate during training.
+    # decay_steps=STEPS_PER_EPOCH*1000
+    # we don't have yet STEPS_PER_EPOCH
+    # use 100, increase if no effect
+    lr_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(
+            0.001,
+            decay_steps=100,
+            decay_rate=1,
+            staircase=False)
+    optimzer = tf.keras.optimizers.Adam(lr_schedule)
 
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
     model.build(input_shape=(None, tensor_shape[0], tensor_shape[1], nr_bands))

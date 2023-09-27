@@ -40,7 +40,7 @@ def onehot_decode(onehot, colormap, nr_bands=3, enhance_colours=True):
     return np.uint8(output)
 
 
-def write_stats(result, out_path='/tmp/accu.png'):
+def write_stats(result, out_dir='/tmp'):
     """Write graphs with loss, val_loss, accuracy and val_accuracy.
 
     :param result: output from model.fit()
@@ -71,8 +71,35 @@ def write_stats(result, out_path='/tmp/accu.png'):
     plt.xlabel("Epoch #")
     plt.ylabel("Loss/Accuracy")
     plt.legend(loc="lower left")
-    if not os.path.isdir(os.path.split(out_path)[0]):
-        os.makedirs(os.path.split(out_path)[0])
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+    out_path = os.path.join(out_dir, 'loss_accuracy.png')
+    plt.savefig(out_path)
+
+    plt.close()
+
+    out_path = os.path.join(out_dir, 'loss.png')
+    plt.figure()
+    plt.plot(result.epoch, result.history["loss"], 'r', label='Training loss')
+    plt.plot(result.epoch, result.history["val_loss"], '--r', label='Validation loss')
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss Value')
+    plt.ylim([0, 1])
+    plt.legend()
+    plt.savefig(out_path)
+
+    plt.close()
+
+    out_path = os.path.join(out_dir, 'accuracy.png')
+    plt.figure()
+    plt.plot(result.epoch, result.history["accuracy"], 'r', label='Training accuracy')
+    plt.plot(result.epoch, result.history["val_accuracy"], '--r', label='Validation accuracy')
+    plt.title('Training and Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy Value')
+    plt.ylim([0, 1])
+    plt.legend()
     plt.savefig(out_path)
 
     plt.close()

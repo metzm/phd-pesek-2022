@@ -6,13 +6,13 @@ import argparse
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.python.keras.callbacks import TensorBoard, ModelCheckpoint, \
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, \
     EarlyStopping
 
 # imports from this package
 import utils
 
-from cnn_lib import AugmentGenerator
+from cnn_lib import AugmentGenerator, Augment, get_tf_dataset
 from architectures import create_model
 from visualization import write_stats
 
@@ -43,31 +43,56 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
             tf.keras.utils.set_random_seed(seed)
 
     model = create_model(
-        model, len(id2code), nr_bands, tensor_shape, loss=loss_function,
+        model, len(id2code), nr_bands, tensor_shape, loss=loss_function, metrics=['accuracy'],
         alpha=tversky_alpha, beta=tversky_beta,
         dropout_rate_input=dropout_rate_input,
         dropout_rate_hidden=dropout_rate_hidden, backbone=backbone, name=name)
 
     # val generator used for both the training and the detection
-    val_generator = AugmentGenerator(
+    #val_generator = AugmentGenerator(
+    #    data_dir, batch_size, 'val', tensor_shape, force_dataset_generation,
+    #    fit_memory, augment=augment, val_set_pct=val_set_pct,
+    #    filter_by_class=filter_by_class, verbose=verbose)
+
+    val_nr_samples, val_ds = get_tf_dataset(
         data_dir, batch_size, 'val', tensor_shape, force_dataset_generation,
-        fit_memory, augment=augment, val_set_pct=val_set_pct,
+        fit_memory, augment=augment, onehot_encode=True, id2code=id2code,
+        val_set_pct=val_set_pct,
         filter_by_class=filter_by_class, verbose=verbose)
+
+    # modify the validation tf dataset
+    val_generator = (val_ds
+                     .batch(batch_size))
 
     # load weights if the model is supposed to do so
     if operation == 'fine-tune':
         model.load_weights(in_weights_path)
 
-    train_generator = AugmentGenerator(
+    #train_generator = AugmentGenerator(
+    #    data_dir, batch_size, 'train', fit_memory=fit_memory,
+    #    augment=augment)
+
+    train_nr_samples, train_ds = get_tf_dataset(
         data_dir, batch_size, 'train', fit_memory=fit_memory,
-        augment=augment)
-    train(model, train_generator, val_generator, id2code, batch_size,
+        augment=augment, onehot_encode=True, id2code=id2code)
+
+    # modify the training tf dataset
+    cache_dir = os.path.join(data_dir, "train_ds_cache")
+    # TODO: use shuffle() ?
+    train_generator = (train_ds
+                       .batch(batch_size)
+                       .cache(cache_dir)
+                       .repeat()
+                       .map(Augment())
+                       .prefetch(buffer_size=tf.data.AUTOTUNE))
+
+    train(model, train_generator, train_nr_samples, val_generator, val_nr_samples, id2code, batch_size,
           output_dir, visualization_path, model_fn, nr_epochs,
           initial_epoch, seed=seed, patience=patience,
           monitored_value=monitored_value, verbose=verbose)
 
 
-def train(model, train_generator, val_generator, id2code, batch_size,
+def train(model, train_generator, train_nr_samples, val_generator, val_nr_samples, id2code, batch_size,
           output_dir, visualization_path, model_fn, nr_epochs,
           initial_epoch=0, seed=1, patience=100,
           monitored_value='val_accuracy', verbose=1):
@@ -126,13 +151,16 @@ def train(model, train_generator, val_generator, id2code, batch_size,
 
     # steps per epoch not needed to be specified if the data are augmented, but
     # not when they are not (our own generator is used)
-    steps_per_epoch = np.ceil(train_generator.nr_samples / batch_size)
-    validation_steps = np.ceil(val_generator.nr_samples / batch_size)
+    steps_per_epoch = np.ceil(train_nr_samples / batch_size)
+    validation_steps = np.ceil(val_nr_samples / batch_size)
 
     # train
+        #train_generator(id2code, seed),
+        #validation_data=val_generator(id2code, seed),
+
     result = model.fit(
-        train_generator(id2code, seed),
-        validation_data=val_generator(id2code, seed),
+        train_generator,
+        validation_data=val_generator,
         steps_per_epoch=steps_per_epoch,
         validation_steps=validation_steps,
         epochs=nr_epochs,
@@ -140,7 +168,7 @@ def train(model, train_generator, val_generator, id2code, batch_size,
         verbose=verbose,
         callbacks=callbacks)
 
-    write_stats(result, os.path.join(visualization_path, 'accu.png'))
+    write_stats(result, visualization_path)
 
 
 if __name__ == '__main__':
