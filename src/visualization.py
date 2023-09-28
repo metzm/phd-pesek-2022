@@ -52,25 +52,26 @@ def write_stats(result, out_dir='/tmp'):
 
     # Plot the model evaluation history
     plt.style.use("ggplot")
-    fig = plt.figure(figsize=(40, 16))
+    fig = plt.figure(figsize=(36, 16))
 
     fig.add_subplot(1, 2, 1)
-    plt.title("Training Loss")
-    plt.plot(epochs_range, result.history["loss"], label="train_loss")
-    plt.plot(epochs_range, result.history["val_loss"], label="val_loss")
-    plt.ylim(0, 1)
-
-    fig.add_subplot(1, 2, 2)
-    plt.title("Training Accuracy")
-    plt.plot(epochs_range, result.history["accuracy"],
-             label="train_accuracy")
-    plt.plot(epochs_range, result.history["val_accuracy"],
-             label="val_accuracy")
+    plt.title("Loss")
+    plt.plot(epochs_range, result.history["loss"], label="Training")
+    plt.plot(epochs_range, result.history["val_loss"], label="Validation")
     plt.ylim(0, 1)
 
     plt.xlabel("Epoch #")
-    plt.ylabel("Loss/Accuracy")
+    #plt.ylabel("Loss/Accuracy")
     plt.legend(loc="lower left")
+
+    fig.add_subplot(1, 2, 2)
+    plt.title("Accuracy")
+    plt.plot(epochs_range, result.history["accuracy"],
+             label="Training")
+    plt.plot(epochs_range, result.history["val_accuracy"],
+             label="Validation")
+    plt.ylim(0, 1)
+
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
     out_path = os.path.join(out_dir, 'loss_accuracy.png')
@@ -80,9 +81,9 @@ def write_stats(result, out_dir='/tmp'):
 
     out_path = os.path.join(out_dir, 'loss.png')
     plt.figure()
-    plt.plot(result.epoch, result.history["loss"], 'r', label='Training loss')
-    plt.plot(result.epoch, result.history["val_loss"], '--r', label='Validation loss')
-    plt.title('Training and Validation Loss')
+    plt.plot(result.epoch, result.history["loss"], 'r', label='Training')
+    plt.plot(result.epoch, result.history["val_loss"], '--r', label='Validation')
+    plt.title('Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss Value')
     plt.ylim([0, 1])
@@ -93,9 +94,9 @@ def write_stats(result, out_dir='/tmp'):
 
     out_path = os.path.join(out_dir, 'accuracy.png')
     plt.figure()
-    plt.plot(result.epoch, result.history["accuracy"], 'r', label='Training accuracy')
-    plt.plot(result.epoch, result.history["val_accuracy"], '--r', label='Validation accuracy')
-    plt.title('Training and Validation Accuracy')
+    plt.plot(result.epoch, result.history["accuracy"], 'r', label='Training')
+    plt.plot(result.epoch, result.history["val_accuracy"], '--r', label='Validation')
+    plt.title('Accuracy')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy Value')
     plt.ylim([0, 1])

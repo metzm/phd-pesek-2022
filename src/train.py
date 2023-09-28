@@ -43,7 +43,7 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
             tf.keras.utils.set_random_seed(seed)
 
     model = create_model(
-        model, len(id2code), nr_bands, tensor_shape, loss=loss_function, metrics=['accuracy'],
+        model, len(id2code), nr_bands, tensor_shape, loss=loss_function,
         alpha=tversky_alpha, beta=tversky_beta,
         dropout_rate_input=dropout_rate_input,
         dropout_rate_hidden=dropout_rate_hidden, backbone=backbone, name=name)
@@ -152,7 +152,8 @@ def train(model, train_generator, train_nr_samples, val_generator, val_nr_sample
     # steps per epoch not needed to be specified if the data are augmented, but
     # not when they are not (our own generator is used)
     steps_per_epoch = np.ceil(train_nr_samples / batch_size)
-    validation_steps = np.ceil(val_nr_samples / batch_size)
+    val_subsplits = 5
+    validation_steps = np.ceil(val_nr_samples / (batch_size * val_subsplits))
 
     # train
         #train_generator(id2code, seed),

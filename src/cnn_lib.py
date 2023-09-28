@@ -30,16 +30,22 @@ class Augment(tf.keras.layers.Layer):
     # Defaults to "horizontal_and_vertical"
 
     # more options:
-    # RandomTranslation, RandomZoom
+    # RandomTranslation: loss becomes worse
     #    tf.keras.layers.RandomTranslation(0.3, 0.3, seed=seed),
+    # 
+    # RandomContrast: some improvement
+    # RandomZoom, only zooming in: promising
 
     self.augment_inputs = tf.keras.Sequential([
         tf.keras.layers.RandomFlip(mode="horizontal_and_vertical", seed=seed),
         tf.keras.layers.RandomRotation(0.45, seed=seed),
+        tf.keras.layers.RandomZoom((-0.5, 0), (-0.5, 0), seed=seed),
+        tf.keras.layers.RandomContrast(0.2, seed=seed),
     ], name="data_augmentation_image")
     self.augment_labels = tf.keras.Sequential([
         tf.keras.layers.RandomFlip(mode="horizontal_and_vertical", seed=seed),
         tf.keras.layers.RandomRotation(0.45, seed=seed),
+        tf.keras.layers.RandomZoom((-0.5, 0), (-0.5, 0), seed=seed),
     ], name="data_augmentation_label")
 
   def call(self, inputs, labels):
