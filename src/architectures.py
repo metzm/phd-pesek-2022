@@ -993,21 +993,32 @@ def create_model(model, nr_classes, nr_bands, tensor_shape,
     elif loss == 'tversky':
         loss = lambda gt, p: categorical_tversky(gt, p, alpha, beta)
     elif loss == 'CategoricalCrossentropy':
-        loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
+        loss = tf.keras.losses.CategoricalCrossentropy(from_logits=False)
     elif loss == 'SparseCategoricalCrossentropy':
-        loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)
 
     # optimizer
     # Many models train better if you gradually reduce the learning rate during training.
-    # decay_steps=STEPS_PER_EPOCH*1000
-    # we don't have yet STEPS_PER_EPOCH
-    # use 100, increase if no effect
+    # decay_steps=STEPS_PER_EPOCH*N_EPOCHS
+    # we don't have yet STEPS_PER_EPOCH and N_EPOCHS
+    # -> get STEPS_PER_EPOCH with a test run with few epochs
+    # adjust initial_learning_rate and decay_rate
+
+    # instead of a fixed learning rate reduction, a callcback can be used to
+    # reduce learning rate only if there is no more improvement:
+    # tf.keras.callbacks.ReduceLROnPlateau
+    # reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2,
+    #                          patience=5)
+    # this needs to be used with model.fit() in train.py
+
     lr_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(
-            0.001,
+            0.0001,
             decay_steps=100,
-            decay_rate=1,
+            decay_rate=1.0,
             staircase=False)
-    optimzer = tf.keras.optimizers.Adam(lr_schedule)
+    optimizer = tf.keras.optimizers.Adam(lr_schedule)
+    # try without lr scheduler:
+    #optimizer = tf.keras.optimizers.Adam(0.0001)
 
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
     model.build(input_shape=(None, tensor_shape[0], tensor_shape[1], nr_bands))

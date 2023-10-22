@@ -32,20 +32,23 @@ class Augment(tf.keras.layers.Layer):
     # more options:
     # RandomTranslation: loss becomes worse
     #    tf.keras.layers.RandomTranslation(0.3, 0.3, seed=seed),
-    # 
+    #
     # RandomContrast: some improvement
-    # RandomZoom, only zooming in: promising
+    # RandomZoom, only zooming in: promising, but time intensive
+    #    tf.keras.layers.RandomZoom((-0.5, 0), (-0.5, 0), seed=seed),
+    # GaussianNoise: some improvement
+    # RandomBrightness: TODO only RGB (3 channels)?
+
 
     self.augment_inputs = tf.keras.Sequential([
         tf.keras.layers.RandomFlip(mode="horizontal_and_vertical", seed=seed),
         tf.keras.layers.RandomRotation(0.45, seed=seed),
-        tf.keras.layers.RandomZoom((-0.5, 0), (-0.5, 0), seed=seed),
         tf.keras.layers.RandomContrast(0.2, seed=seed),
+        tf.keras.layers.GaussianNoise(0.01, seed=seed),
     ], name="data_augmentation_image")
     self.augment_labels = tf.keras.Sequential([
         tf.keras.layers.RandomFlip(mode="horizontal_and_vertical", seed=seed),
         tf.keras.layers.RandomRotation(0.45, seed=seed),
-        tf.keras.layers.RandomZoom((-0.5, 0), (-0.5, 0), seed=seed),
     ], name="data_augmentation_label")
 
   def call(self, inputs, labels):
@@ -1139,7 +1142,7 @@ def load_gdal_as_array(file_path, rescale=False, onehot_encode=False, id2code=No
 
     # close GDAL dataset
     image = None
-    
+
     # rescale input image
     if rescale:
         input_image = input_image.astype(np.float32)
@@ -1166,12 +1169,26 @@ def get_tf_dataset(data_dir, batch_size=5, operation='train',
                  verbose=1):
     """
     convert tiled input images into a simple tf dataset
-    
+
     returns number of samples and a tf dataset
     """
     if operation not in ('train', 'val'):
         raise AttributeError('Only values "train" and "val" supported as '
                              'operation. "{}" was given'.format(operation))
+
+    # check if the tf dataset already exists
+    ds_dir = os.path.join(data_dir, f"saved_tf_ds_{operation}")
+    if os.path.isdir(ds_dir):
+        print(f"get_tf_dataset(): loading existing tf dataset for operation {operation} from {ds_dir} ...")
+        ds = tf.data.Dataset.load(ds_dir)
+        nr_samples = 0
+        for element in ds:
+            nr_samples = nr_samples + 1
+
+        print(f"get_tf_dataset(): loaded {nr_samples} images and masks for operation {operation}")
+
+        return nr_samples, ds
+
 
     images_dir = os.path.join(
         data_dir, '{}_images'.format(operation))
@@ -1209,12 +1226,11 @@ def get_tf_dataset(data_dir, batch_size=5, operation='train',
     print(f"get_tf_dataset(): creating tf dataset from {image_count} images and masks for operation {operation} ...")
     # DO NOT USE modifications like cache(), map(), repeat()
     ds = tf.data.Dataset.from_tensor_slices((img_list, np.asarray(mask_list)))
-    
+
     img_list = None
     mask_list = None
-    
+
     # save tf dataset to disk
-    ds_dir = os.path.join(data_dir, f"saved_tf_ds_{operation}")
     shutil.rmtree(ds_dir, ignore_errors=True)
     print(f"get_tf_dataset(): saving tf dataset for operation {operation} to {ds_dir} ...")
     ds.save(ds_dir)
@@ -1229,5 +1245,5 @@ def get_tf_dataset(data_dir, batch_size=5, operation='train',
     print("...done")
 
     return nr_samples, ds
-    
-    
+
+

@@ -42,8 +42,9 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
         else:
             tf.keras.utils.set_random_seed(seed)
 
+    # tinyunet: nr_filters=32
     model = create_model(
-        model, len(id2code), nr_bands, tensor_shape, loss=loss_function,
+        model, len(id2code), nr_bands, tensor_shape, nr_filters=32, loss=loss_function,
         alpha=tversky_alpha, beta=tversky_beta,
         dropout_rate_input=dropout_rate_input,
         dropout_rate_hidden=dropout_rate_hidden, backbone=backbone, name=name)
@@ -61,8 +62,12 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
         filter_by_class=filter_by_class, verbose=verbose)
 
     # modify the validation tf dataset
+    # cache() seems broken, unexpected truncation of the dataset, not needed anyway
+    # since the dataset is on disk
     val_generator = (val_ds
-                     .batch(batch_size))
+                     .batch(batch_size,
+                            num_parallel_calls=tf.data.AUTOTUNE)
+                     .repeat())
 
     # load weights if the model is supposed to do so
     if operation == 'fine-tune':
@@ -77,11 +82,12 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
         augment=augment, onehot_encode=True, id2code=id2code)
 
     # modify the training tf dataset
-    cache_dir = os.path.join(data_dir, "train_ds_cache")
+    # cache() seems broken, unexpected truncation of the dataset, not needed anyway
+    # since the dataset is on disk
     # TODO: use shuffle() ?
     train_generator = (train_ds
-                       .batch(batch_size)
-                       .cache(cache_dir)
+                       .batch(batch_size,
+                              num_parallel_calls=tf.data.AUTOTUNE)
                        .repeat()
                        .map(Augment())
                        .prefetch(buffer_size=tf.data.AUTOTUNE))
@@ -152,7 +158,7 @@ def train(model, train_generator, train_nr_samples, val_generator, val_nr_sample
     # steps per epoch not needed to be specified if the data are augmented, but
     # not when they are not (our own generator is used)
     steps_per_epoch = np.ceil(train_nr_samples / batch_size)
-    val_subsplits = 5
+    val_subsplits = 1
     validation_steps = np.ceil(val_nr_samples / (batch_size * val_subsplits))
 
     # train
