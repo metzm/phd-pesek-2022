@@ -56,8 +56,8 @@ def write_stats(result, out_dir='/tmp'):
 
     fig.add_subplot(1, 2, 1)
     plt.title("Loss")
-    plt.plot(epochs_range, result.history["loss"], label="Training")
-    plt.plot(epochs_range, result.history["val_loss"], label="Validation")
+    plt.plot(result.epoch, result.history["loss"], label="Training")
+    plt.plot(result.epoch, result.history["val_loss"], label="Validation")
     plt.ylim(0, 2)
 
     plt.xlabel("Epoch #")
@@ -66,10 +66,8 @@ def write_stats(result, out_dir='/tmp'):
 
     fig.add_subplot(1, 2, 2)
     plt.title("Accuracy")
-    plt.plot(epochs_range, result.history["accuracy"],
-             label="Training")
-    plt.plot(epochs_range, result.history["val_accuracy"],
-             label="Validation")
+    plt.plot(result.epoch, result.history["accuracy"], label="Training")
+    plt.plot(result.epoch, result.history["val_accuracy"], label="Validation")
     plt.ylim(0, 1)
 
     if not os.path.isdir(out_dir):
@@ -176,6 +174,9 @@ def visualize_detections(images, ground_truths, detections, id2code,
                 # normalize the confusion matrix
                 row_sums = conf_matrix.sum(axis=1)[:, np.newaxis]
                 # TODO: solve division by 0
+                for j in range(len(row_sums)):
+                    if row_sums[j] == 0:
+                        row_sums[j] = 1
                 cm_norm = np.around(
                     conf_matrix.astype('float') / row_sums, decimals=2
                 )

@@ -16,6 +16,11 @@ from cnn_lib import AugmentGenerator, Augment, get_tf_dataset
 from architectures import create_model
 from visualization import write_stats
 
+def rescale_image(input_image, input_mask):
+    input_image = tf.cast(input_image, tf.float32) / 255.0
+
+    return input_image, input_mask
+
 
 def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
          visualization_path='/tmp', nr_epochs=1, initial_epoch=0, batch_size=1,
@@ -61,6 +66,9 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
         val_set_pct=val_set_pct,
         filter_by_class=filter_by_class, verbose=verbose)
 
+    # rescale images when loading
+    val_ds = val_ds.map(rescale_image, num_parallel_calls=tf.data.AUTOTUNE)
+
     # modify the validation tf dataset
     # cache() seems broken, unexpected truncation of the dataset, not needed anyway
     # since the dataset is on disk
@@ -81,6 +89,9 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
         data_dir, batch_size, 'train', fit_memory=fit_memory,
         augment=augment, onehot_encode=True, id2code=id2code)
 
+    # rescale images when loading
+    train_ds = train_ds.map(rescale_image, num_parallel_calls=tf.data.AUTOTUNE)
+
     # modify the training tf dataset
     # cache() seems broken, unexpected truncation of the dataset, not needed anyway
     # since the dataset is on disk
@@ -96,7 +107,6 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
           output_dir, visualization_path, model_fn, nr_epochs,
           initial_epoch, seed=seed, patience=patience,
           monitored_value=monitored_value, verbose=verbose)
-
 
 def train(model, train_generator, train_nr_samples, val_generator, val_nr_samples, id2code, batch_size,
           output_dir, visualization_path, model_fn, nr_epochs,
@@ -124,7 +134,7 @@ def train(model, train_generator, train_nr_samples, val_generator, val_nr_sample
     """
     # set up model_path
     if model_fn is None:
-        model_fn = '{}_ep{}_pat{}.h5'.format(model.lower(), nr_epochs,
+        model_fn = '{}_ep{}_pat{}.weights.h5'.format(model.lower(), nr_epochs,
                                              patience)
 
     out_model_path = os.path.join(output_dir, model_fn)
@@ -157,9 +167,9 @@ def train(model, train_generator, train_nr_samples, val_generator, val_nr_sample
 
     # steps per epoch not needed to be specified if the data are augmented, but
     # not when they are not (our own generator is used)
-    steps_per_epoch = np.ceil(train_nr_samples / batch_size)
+    steps_per_epoch = int(np.ceil(train_nr_samples / batch_size))
     val_subsplits = 1
-    validation_steps = np.ceil(val_nr_samples / (batch_size * val_subsplits))
+    validation_steps = int(np.ceil(val_nr_samples / (batch_size * val_subsplits)))
 
     # train
         #train_generator(id2code, seed),

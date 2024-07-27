@@ -107,7 +107,7 @@ class _BaseModel(Model, ABC):
         :return: the classifier layer
         """
         return Conv2D(self.nr_classes,
-                      (1, 1),
+                      (3, 3),
                       activation=self.get_classifier_function(),
                       padding=self.padding,
                       dilation_rate=self.dilation_rate,

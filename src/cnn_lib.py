@@ -39,12 +39,21 @@ class Augment(tf.keras.layers.Layer):
     # GaussianNoise: some improvement
     # RandomBrightness: TODO only RGB (3 channels)?
 
+    # Guassian noise on images
+    #    tf.keras.layers.GaussianNoise(0.02, seed=seed),
+
+    # Guassian noise on labels
+    #    tf.keras.layers.GaussianNoise(0.4, seed=seed),
+
+    # after GaussianNoise on labels
+    # t2 = tf.clip_by_value(t, clip_value_min=0, clip_value_max=1)
 
     self.augment_inputs = tf.keras.Sequential([
         tf.keras.layers.RandomFlip(mode="horizontal_and_vertical", seed=seed),
         tf.keras.layers.RandomRotation(0.45, seed=seed),
-        tf.keras.layers.RandomContrast(0.2, seed=seed),
-        tf.keras.layers.GaussianNoise(0.01, seed=seed),
+        tf.keras.layers.RandomContrast(0.6, seed=seed),
+        tf.keras.layers.RandomBrightness(0.5, value_range=(0, 1.0), seed=seed),
+        tf.keras.layers.GaussianNoise(0.02, seed=seed),
     ], name="data_augmentation_image")
     self.augment_labels = tf.keras.Sequential([
         tf.keras.layers.RandomFlip(mode="horizontal_and_vertical", seed=seed),
@@ -52,8 +61,9 @@ class Augment(tf.keras.layers.Layer):
     ], name="data_augmentation_label")
 
   def call(self, inputs, labels):
-    inputs = self.augment_inputs(inputs)
-    labels = self.augment_labels(labels)
+    inputs = self.augment_inputs(inputs, training=True)
+    labels = self.augment_labels(labels, training=True)
+    inputs = tf.clip_by_value(inputs, clip_value_min=0, clip_value_max=1)
     return inputs, labels
 
 
@@ -1177,7 +1187,7 @@ def get_tf_dataset(data_dir, batch_size=5, operation='train',
                              'operation. "{}" was given'.format(operation))
 
     # check if the tf dataset already exists
-    ds_dir = os.path.join(data_dir, f"saved_tf_ds_{operation}")
+    ds_dir = os.path.join(data_dir, f"saved_tf_ds_uint8_{operation}")
     if os.path.isdir(ds_dir):
         print(f"get_tf_dataset(): loading existing tf dataset for operation {operation} from {ds_dir} ...")
         ds = tf.data.Dataset.load(ds_dir)
@@ -1218,7 +1228,7 @@ def get_tf_dataset(data_dir, batch_size=5, operation='train',
     print(f"get_tf_dataset(): loading {image_count} images and masks for operation {operation} ...")
 
     for i in range(image_count):
-        input_image = load_gdal_as_array(img_filelist[i], rescale=True)
+        input_image = load_gdal_as_array(img_filelist[i], rescale=False)
         input_mask = load_gdal_as_array(mask_filelist[i], onehot_encode=True, id2code=id2code)
         img_list.append(input_image)
         mask_list.append(input_mask)
