@@ -73,6 +73,7 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
     # cache() seems broken, unexpected truncation of the dataset, not needed anyway
     # since the dataset is on disk
     val_generator = (val_ds
+                     .ignore_errors(log_warning=True)
                      .batch(batch_size,
                             num_parallel_calls=tf.data.AUTOTUNE)
                      .repeat())
@@ -97,6 +98,7 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
     # since the dataset is on disk
     # TODO: use shuffle() ?
     train_generator = (train_ds
+                       .ignore_errors(log_warning=True)
                        .batch(batch_size,
                               num_parallel_calls=tf.data.AUTOTUNE)
                        .repeat()
