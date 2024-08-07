@@ -108,12 +108,8 @@ class _BaseModel(Model, ABC):
 
         :return: the classifier layer
         """
-        if self.onehot_encode is True:
-            nr_filters = self.nr_classes
-        else:
-            nr_filters = 1
-        return Conv2D(nr_filters,
-                      (1, 1),
+        return Conv2D(self.nr_classes,
+                      (3, 3),
                       activation=self.get_classifier_function(),
                       padding=self.padding,
                       dilation_rate=self.dilation_rate,
@@ -210,6 +206,7 @@ class UNet(_BaseModel):
         :param mask: A mask or list of masks
         :return: the output of the classifier layer
         """
+
         x = self.dropout_in(inputs)
 
         # downsampling
@@ -234,6 +231,7 @@ class UNet(_BaseModel):
 
         :return: this thing unfortunately differs
         """
+
         # downsampling layers
         ds_blocks = []
         ds_pools = []
@@ -1353,6 +1351,33 @@ def create_model(model, nr_classes, nr_bands, tensor_shape,
         loss = categorical_dice
     elif loss == 'tversky':
         loss = lambda gt, p: categorical_tversky(gt, p, alpha, beta)
+    elif loss == 'CategoricalCrossentropy':
+        loss = tf.keras.losses.CategoricalCrossentropy(from_logits=False)
+    elif loss == 'SparseCategoricalCrossentropy':
+        loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+
+    # optimizer
+    # Many models train better if you gradually reduce the learning rate during training.
+    # decay_steps=STEPS_PER_EPOCH*N_EPOCHS
+    # we don't have yet STEPS_PER_EPOCH and N_EPOCHS
+    # -> get STEPS_PER_EPOCH with a test run with few epochs
+    # adjust initial_learning_rate and decay_rate
+
+    # instead of a fixed learning rate reduction, a callcback can be used to
+    # reduce learning rate only if there is no more improvement:
+    # tf.keras.callbacks.ReduceLROnPlateau
+    # reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2,
+    #                          patience=5)
+    # this needs to be used with model.fit() in train.py
+
+    lr_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(
+            0.0001,
+            decay_steps=100,
+            decay_rate=1.0,
+            staircase=False)
+    optimizer = tf.keras.optimizers.Adam(lr_schedule)
+    # try without lr scheduler:
+    #optimizer = tf.keras.optimizers.Adam(0.0001)
 
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
     model.build(input_shape=(None, tensor_shape[0], tensor_shape[1], nr_bands))

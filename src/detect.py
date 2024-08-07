@@ -41,8 +41,9 @@ def main(data_dir, model, in_weights_path, visualization_path, batch_size,
         else:
             tf.keras.utils.set_random_seed(seed)
 
+    # tinyunet: nr_filters=32
     model = create_model(model, len(id2code), nr_bands, tensor_shape,
-                         backbone=backbone)
+                         nr_filters=32, backbone=backbone)
 
     # val generator used for both the training and the detection
     val_generator = AugmentGenerator(
@@ -183,10 +184,11 @@ if __name__ == '__main__':
     if args.weights_path is None:
         raise parser.error(
             'Argument weights_path required')
-    if not 0 <= args.validation_set_percentage <= 1:
+    # allow validation_set_percentage to be >= 1 in order to use all tiles for
+    # prediction
+    if 0 > args.validation_set_percentage:
         raise parser.error(
-            'Argument validation_set_percentage must be greater or equal to 0 '
-            'and smaller than 1')
+            'Argument validation_set_percentage must be greater or equal to 0')
 
     main(args.data_dir, args.model, args.weights_path, args.visualization_path,
          args.batch_size, args.seed, (args.tensor_height, args.tensor_width),

@@ -1,8 +1,11 @@
 #!/usr/bin/python3
 
 import os
+import shutil
+import gc
 
 import numpy as np
+import pathlib
 import tensorflow as tf
 
 from osgeo import gdal
@@ -14,6 +17,54 @@ from tensorflow.keras import backend as keras
 
 from data_preparation import generate_dataset_structure
 from cnn_exceptions import LayerDefinitionError
+
+
+class Augment(tf.keras.layers.Layer):
+  def __init__(self, seed=42):
+    super().__init__()
+    # both use the same seed, so they'll make the same random changes.
+    # randomflip mode:
+    # String indicating which flip mode to use.
+    # Can be "horizontal", "vertical", or "horizontal_and_vertical".
+    # "horizontal" is a left-right flip and "vertical" is a top-bottom flip.
+    # Defaults to "horizontal_and_vertical"
+
+    # more options:
+    # RandomTranslation: loss becomes worse
+    #    tf.keras.layers.RandomTranslation(0.3, 0.3, seed=seed),
+    #
+    # RandomContrast: some improvement
+    # RandomZoom, only zooming in: promising, but time intensive
+    #    tf.keras.layers.RandomZoom((-0.5, 0), (-0.5, 0), seed=seed),
+    # GaussianNoise: some improvement
+    # RandomBrightness: TODO only RGB (3 channels)?
+
+    # Guassian noise on images
+    #    tf.keras.layers.GaussianNoise(0.02, seed=seed),
+
+    # Guassian noise on labels
+    #    tf.keras.layers.GaussianNoise(0.4, seed=seed),
+
+    # after GaussianNoise on labels
+    # t2 = tf.clip_by_value(t, clip_value_min=0, clip_value_max=1)
+
+    self.augment_inputs = tf.keras.Sequential([
+        tf.keras.layers.RandomFlip(mode="horizontal_and_vertical", seed=seed),
+        tf.keras.layers.RandomRotation(0.45, seed=seed),
+        tf.keras.layers.RandomContrast(0.6, seed=seed),
+        tf.keras.layers.RandomBrightness(0.5, value_range=(0, 1.0), seed=seed),
+        tf.keras.layers.GaussianNoise(0.02, seed=seed),
+    ], name="data_augmentation_image")
+    self.augment_labels = tf.keras.Sequential([
+        tf.keras.layers.RandomFlip(mode="horizontal_and_vertical", seed=seed),
+        tf.keras.layers.RandomRotation(0.45, seed=seed),
+    ], name="data_augmentation_label")
+
+  def call(self, inputs, labels):
+    inputs = self.augment_inputs(inputs, training=True)
+    labels = self.augment_labels(labels, training=True)
+    inputs = tf.clip_by_value(inputs, clip_value_min=0, clip_value_max=1)
+    return inputs, labels
 
 
 class AugmentGenerator:
@@ -44,6 +95,9 @@ class AugmentGenerator:
         :param ignore_masks: do not create nor return masks
         :param verbose: verbosity (0=quiet, >0 verbose)
         """
+
+        #super(AugmentGenerator, self).__init__(name="AugmentGenerator", **kwargs)
+
         if operation not in ('train', 'val'):
             raise AttributeError('Only values "train" and "val" supported as '
                                  'operation. "{}" was given'.format(operation))
@@ -85,6 +139,7 @@ class AugmentGenerator:
         #     return self.generate_augmented(id2code, seed)
         # TODO: Why does the TF approach not work?
         return self.generate_numpy(id2code)
+        #return self.generate_augmented(id2code, seed)
 
     def generate_numpy(self, id2code):
         """Generate batches of data using our own numpy generator.
@@ -99,7 +154,7 @@ class AugmentGenerator:
         """
         # create generators
         image_generator = self.numpy_generator(
-            self.images_dir, False, self.batch_size, self.fit_memory)
+            self.images_dir, True, self.batch_size, self.fit_memory)
         mask_generator = self.numpy_generator(
             self.masks_dir, False, self.batch_size, self.fit_memory)
 
@@ -134,13 +189,26 @@ class AugmentGenerator:
                 self.onehot_encode(masks[x, :, :, :], id2code) for x in
                 range(masks.shape[0])]
 
-        datagen = ImageDataGenerator(rotation_range=180, shear_range=0.2,
-                                     horizontal_flip=True, vertical_flip=True)
+        #train_images = tf.data.Dataset.from_tensor_slices((images, np.asarray(masks)))
+        #train_images = tf.data.Dataset.from_tensor_slices((images, masks))
+        # cast to float is not needed if augmentation is used
+        train_images = tf.data.Dataset.from_tensor_slices((images, masks))
+        cache_dir = os.path.join(self.images_dir, "cache")
+        if not os.path.isdir(cache_dir):
+            os.makedirs(cache_dir)
 
-        datagen.fit(images, seed=seed, augment=True)
+        train_batches = (
+            train_images
+            .batch(self.batch_size)
+            .cache(cache_dir)
+            .repeat()
+            .map(Augment())
+            .prefetch(buffer_size=tf.data.AUTOTUNE))
 
-        return datagen.flow(images, np.asarray(masks), seed=seed,
-                            batch_size=self.batch_size, shuffle=True)
+            #.shuffle(25)
+
+
+        return train_batches
 
     def numpy_generator(self, data_dir, rescale=False, batch_size=5,
                         fit_memory=False):
@@ -221,6 +289,7 @@ class AugmentGenerator:
             # move the batch to be the last dimension
             transposed = np.moveaxis(image.ReadAsArray(), 0, -1)
 
+        transposed = transposed.astype(np.float32)
         if rescale:
             transposed *= 1. / 255
 
@@ -1040,3 +1109,151 @@ class MyMaxUnpooling(Layer):
                               input_shape[0][3])
 
         super(MyMaxUnpooling, self).build(input_shape)
+
+
+def onehot_encode_gdal(orig_image, colormap):
+    """Encode input images into one hot ones.
+
+    Unfortunately, keras.utils.to_categorical cannot be used because our
+    classes are not consecutive.
+
+    :param orig_image: original image
+    :param colormap: dictionary mapping label ids to their codes
+    :return: One hot encoded image of dimensions
+        (height x width x num_classes)
+    """
+    num_classes = len(colormap)
+    shape = orig_image.shape[:2] + (num_classes,)
+    encoded_image = np.empty(shape, dtype=np.uint8)
+
+    # reshape to the shape used inside the onehot matrix
+    reshaped = orig_image.reshape((-1, 1))
+
+    for i, cls in enumerate(colormap):
+        all_ax = np.all(reshaped == colormap[i], axis=1)
+        encoded_image[:, :, i] = all_ax.reshape(shape[:2])
+
+    return encoded_image
+
+
+def load_gdal_as_array(file_path, rescale=False, onehot_encode=False, id2code=None):
+
+    image = gdal.Open(str(file_path), gdal.GA_ReadOnly)
+    image_array = image.ReadAsArray()
+
+    # load image
+    # GDAL reads masks as having no third dimension
+    # (we want it to be equal to one)
+    if image_array.ndim == 2:
+        input_image = np.expand_dims(image_array, -1)
+    else:
+        # move the batch to be the last dimension
+        input_image = np.moveaxis(image_array, 0, -1)
+
+    # close GDAL dataset
+    image = None
+
+    # rescale input image
+    if rescale:
+        input_image = input_image.astype(np.float32)
+        input_image *= 1.0 / 255.0
+
+    if onehot_encode and id2code:
+        # one hot encode masks
+        batch = []
+        batch.append(input_image)
+        x2i = np.stack(batch)
+        x2i = [
+            onehot_encode_gdal(x2i[x, :, :, :], id2code) for x in
+            range(x2i.shape[0])]
+        x2i = np.asarray(x2i)
+        input_image = x2i[0]
+
+    return input_image
+
+
+def get_tf_dataset(data_dir, batch_size=5, operation='train',
+                 tensor_shape=(256, 256), force_dataset_generation=False,
+                 fit_memory=False, augment=False, onehot_encode=True, id2code=None,
+                 val_set_pct=0.2, filter_by_class=None, ignore_masks=False,
+                 verbose=1):
+    """
+    convert tiled input images into a simple tf dataset
+
+    returns number of samples and a tf dataset
+    """
+    if operation not in ('train', 'val'):
+        raise AttributeError('Only values "train" and "val" supported as '
+                             'operation. "{}" was given'.format(operation))
+
+    # check if the tf dataset already exists
+    ds_dir = os.path.join(data_dir, f"saved_tf_ds_uint8_{operation}")
+    if os.path.isdir(ds_dir):
+        print(f"get_tf_dataset(): loading existing tf dataset for operation {operation} from {ds_dir} ...")
+        ds = tf.data.Dataset.load(ds_dir)
+        nr_samples = 0
+        for element in ds:
+            nr_samples = nr_samples + 1
+
+        print(f"get_tf_dataset(): loaded {nr_samples} images and masks for operation {operation}")
+
+        return nr_samples, ds
+
+
+    images_dir = os.path.join(
+        data_dir, '{}_images'.format(operation))
+    masks_dir = os.path.join(
+        data_dir, '{}_masks'.format(operation))
+    # generate the dataset structure if not generated
+    do_exist = [os.path.isdir(i) is True for i in (images_dir, masks_dir)]
+    if force_dataset_generation is True or all(do_exist) is False:
+        generate_dataset_structure(data_dir, tensor_shape, val_set_pct,
+                                   filter_by_class, augment, ignore_masks,
+                                   verbose=verbose)
+
+    # create variables useful throughout the entire class
+    nr_samples = len(os.listdir(images_dir))
+
+    img_filelist = list(pathlib.Path(images_dir).glob('*.tif'))
+    mask_filelist = list(pathlib.Path(masks_dir).glob('*.tif'))
+
+    image_count = len(img_filelist)
+    mask_count = len(mask_filelist)
+
+    # TODO: nr_samples, image_count, mask_count must be the same
+
+    img_list = list()
+    mask_list = list()
+
+    print(f"get_tf_dataset(): loading {image_count} images and masks for operation {operation} ...")
+
+    for i in range(image_count):
+        input_image = load_gdal_as_array(img_filelist[i], rescale=False)
+        input_mask = load_gdal_as_array(mask_filelist[i], onehot_encode=True, id2code=id2code)
+        img_list.append(input_image)
+        mask_list.append(input_mask)
+
+    print(f"get_tf_dataset(): creating tf dataset from {image_count} images and masks for operation {operation} ...")
+    # DO NOT USE modifications like cache(), map(), repeat()
+    ds = tf.data.Dataset.from_tensor_slices((img_list, np.asarray(mask_list)))
+
+    img_list = None
+    mask_list = None
+
+    # save tf dataset to disk
+    shutil.rmtree(ds_dir, ignore_errors=True)
+    print(f"get_tf_dataset(): saving tf dataset for operation {operation} to {ds_dir} ...")
+    ds.save(ds_dir)
+    ds = None
+
+    # Garbage Collector: release unreferenced memory
+    gc.collect()
+
+    # load dataset from disk
+    print(f"get_tf_dataset(): loading tf dataset for operation {operation} from {ds_dir} ...")
+    ds = tf.data.Dataset.load(ds_dir)
+    print("...done")
+
+    return nr_samples, ds
+
+

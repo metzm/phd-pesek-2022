@@ -6,15 +6,20 @@ import argparse
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.python.keras.callbacks import TensorBoard, ModelCheckpoint, \
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, \
     EarlyStopping
 
 # imports from this package
 import utils
 
-from cnn_lib import AugmentGenerator
+from cnn_lib import AugmentGenerator, Augment, get_tf_dataset
 from architectures import create_model
 from visualization import write_stats
+
+def rescale_image(input_image, input_mask):
+    input_image = tf.cast(input_image, tf.float32) / 255.0
+
+    return input_image, input_mask
 
 
 def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
@@ -42,32 +47,70 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
         else:
             tf.keras.utils.set_random_seed(seed)
 
+    # tinyunet: nr_filters=32
     model = create_model(
-        model, len(id2code), nr_bands, tensor_shape, loss=loss_function,
+        model, len(id2code), nr_bands, tensor_shape, nr_filters=32, loss=loss_function,
         alpha=tversky_alpha, beta=tversky_beta,
         dropout_rate_input=dropout_rate_input,
         dropout_rate_hidden=dropout_rate_hidden, backbone=backbone, name=name)
 
     # val generator used for both the training and the detection
-    val_generator = AugmentGenerator(
+    #val_generator = AugmentGenerator(
+    #    data_dir, batch_size, 'val', tensor_shape, force_dataset_generation,
+    #    fit_memory, augment=augment, val_set_pct=val_set_pct,
+    #    filter_by_class=filter_by_class, verbose=verbose)
+
+    val_nr_samples, val_ds = get_tf_dataset(
         data_dir, batch_size, 'val', tensor_shape, force_dataset_generation,
-        fit_memory, augment=augment, val_set_pct=val_set_pct,
+        fit_memory, augment=augment, onehot_encode=True, id2code=id2code,
+        val_set_pct=val_set_pct,
         filter_by_class=filter_by_class, verbose=verbose)
+
+    # rescale images when loading
+    val_ds = val_ds.map(rescale_image, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # modify the validation tf dataset
+    # cache() seems broken, unexpected truncation of the dataset, not needed anyway
+    # since the dataset is on disk
+    val_generator = (val_ds
+                     .ignore_errors(log_warning=True)
+                     .batch(batch_size,
+                            num_parallel_calls=tf.data.AUTOTUNE)
+                     .repeat())
 
     # load weights if the model is supposed to do so
     if operation == 'fine-tune':
         model.load_weights(in_weights_path)
 
-    train_generator = AugmentGenerator(
+    #train_generator = AugmentGenerator(
+    #    data_dir, batch_size, 'train', fit_memory=fit_memory,
+    #    augment=augment)
+
+    train_nr_samples, train_ds = get_tf_dataset(
         data_dir, batch_size, 'train', fit_memory=fit_memory,
-        augment=augment)
-    train(model, train_generator, val_generator, id2code, batch_size,
+        augment=augment, onehot_encode=True, id2code=id2code)
+
+    # rescale images when loading
+    train_ds = train_ds.map(rescale_image, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # modify the training tf dataset
+    # cache() seems broken, unexpected truncation of the dataset, not needed anyway
+    # since the dataset is on disk
+    # TODO: use shuffle() ?
+    train_generator = (train_ds
+                       .ignore_errors(log_warning=True)
+                       .batch(batch_size,
+                              num_parallel_calls=tf.data.AUTOTUNE)
+                       .repeat()
+                       .map(Augment())
+                       .prefetch(buffer_size=tf.data.AUTOTUNE))
+
+    train(model, train_generator, train_nr_samples, val_generator, val_nr_samples, id2code, batch_size,
           output_dir, visualization_path, model_fn, nr_epochs,
           initial_epoch, seed=seed, patience=patience,
           monitored_value=monitored_value, verbose=verbose)
 
-
-def train(model, train_generator, val_generator, id2code, batch_size,
+def train(model, train_generator, train_nr_samples, val_generator, val_nr_samples, id2code, batch_size,
           output_dir, visualization_path, model_fn, nr_epochs,
           initial_epoch=0, seed=1, patience=100,
           monitored_value='val_accuracy', verbose=1):
@@ -93,7 +136,7 @@ def train(model, train_generator, val_generator, id2code, batch_size,
     """
     # set up model_path
     if model_fn is None:
-        model_fn = '{}_ep{}_pat{}.h5'.format(model.lower(), nr_epochs,
+        model_fn = '{}_ep{}_pat{}.weights.h5'.format(model.lower(), nr_epochs,
                                              patience)
 
     out_model_path = os.path.join(output_dir, model_fn)
@@ -126,13 +169,17 @@ def train(model, train_generator, val_generator, id2code, batch_size,
 
     # steps per epoch not needed to be specified if the data are augmented, but
     # not when they are not (our own generator is used)
-    steps_per_epoch = np.ceil(train_generator.nr_samples / batch_size)
-    validation_steps = np.ceil(val_generator.nr_samples / batch_size)
+    steps_per_epoch = int(np.ceil(train_nr_samples / batch_size))
+    val_subsplits = 1
+    validation_steps = int(np.ceil(val_nr_samples / (batch_size * val_subsplits)))
 
     # train
+        #train_generator(id2code, seed),
+        #validation_data=val_generator(id2code, seed),
+
     result = model.fit(
-        train_generator(id2code, seed),
-        validation_data=val_generator(id2code, seed),
+        train_generator,
+        validation_data=val_generator,
         steps_per_epoch=steps_per_epoch,
         validation_steps=validation_steps,
         epochs=nr_epochs,
@@ -140,7 +187,7 @@ def train(model, train_generator, val_generator, id2code, batch_size,
         verbose=verbose,
         callbacks=callbacks)
 
-    write_stats(result, os.path.join(visualization_path, 'accu.png'))
+    write_stats(result, visualization_path)
 
 
 if __name__ == '__main__':
