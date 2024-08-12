@@ -80,22 +80,25 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
                             num_parallel_calls=tf.data.AUTOTUNE)
                      .repeat())
 
-    # load weights if the model is supposed to do so
+    # load weights if the model is supposed to do so (i.e. fine-tune mode)
     if operation == 'fine-tune':
-        # TODO check if parameters set, if input output dim does not match
+        # if input or output dimension changed w.r.t pretrained model
         if finetune_old_inp_dim or finetune_old_out_dim:
             if model == "U-Net":
+                # set dimensions for creating pretrained model
                 if finetune_old_inp_dim:
                     nr_bands = finetune_old_inp_dim
                 if finetune_old_out_dim:
                     num_class = finetune_old_out_dim
                 else:
                     num_class = len(id2code)
+                # creating model with dimensions of pretrained model
                 model_old = create_model(
                     model, num_class , nr_bands, tensor_shape, nr_filters=32, loss=loss_function,
                     alpha=tversky_alpha, beta=tversky_beta,
                     dropout_rate_input=dropout_rate_input,
                     dropout_rate_hidden=dropout_rate_hidden, backbone=backbone, name=name, verbose=False)
+                # Set weights of new model, with weights of pretrained model
                 # NOTE: model.layers returns list of model layers BUT not necessarily in the correct order
                 # Thus have to explicitely check for first and last layer index
                 # Get all layer names:
@@ -108,14 +111,19 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
                 ind_chlayer_last = layer_names.index(chlayer_last)
                 # iterate over all layers to set the weights
                 for ind in range(0,len(model_new.layers)):
+                    # if input dimension changed, don't set weigts for this layer in new model
                     if ind == ind_chlayer_first and finetune_old_inp_dim:
                         continue
+                    # if output dimension changed, don't set weigts for this layer in new model
                     if ind == ind_chlayer_last and finetune_old_out_dim:
                         continue
+                    # set weights from pretrained model, for all remaining layers
                     model_new.layers[ind].set_weights(model_old.layers[ind].get_weights())
             else:
-                print("WARNING: Change of input or output dimensions of pretrained models only supported for U-Net so far")
+                sys.exit("ERROR: Change of input or output dimensions w.r.t pretrained models only "
+                         "supported for U-Net so far (parameter --finetune_old_inp_dim or --finetune_old_out_dim)")
         else:
+            # if model dimension did not chainged, load weights from complete model
             model_new.load_weights(in_weights_path)
 
     #train_generator = AugmentGenerator(
@@ -331,14 +339,15 @@ if __name__ == '__main__':
         choices=('ResNet50', 'ResNet101', 'ResNet152', 'VGG16'),
         help='Backbone architecture')
     parser.add_argument(
-        '--finetune_old_inp_dim', type=int, default=None,
-        help='Input dimension of pretrained model, used for finetuning'
+        "--finetune_old_inp_dim", type=int, default=None,
+        help="Input dimension of pretrained model, used for finetuning. "
+             "Set if dimension changed in new/currently trained model."
     )
     parser.add_argument(
-        '--finetune_old_out_dim', type=int, default=None,
-        help='Output dimension of pretrained model, used for finetuning'
+        "--finetune_old_out_dim", type=int, default=None,
+        help="Output dimension of pretrained model, used for finetuning. "
+             "Set if dimension changed in new/currently trained model."
     )
-
     args = parser.parse_args()
 
     # check required arguments by individual operations
@@ -347,7 +356,8 @@ if __name__ == '__main__':
             'Argument weights_path required for operation == fine-tune')
     if (args.finetune_old_inp_dim or args.finetune_old_out_dim) and args.operation != "fine-tune":
         raise parser.error(
-            'Argument operation==fine-tune required for arguments finetune_old_inp_dim or finetune_old_out_dim'
+            "Argument operation==fine-tune required for arguments "
+            "finetune_old_inp_dim or finetune_old_out_dim"
         )
     if args.operation == 'train' and args.initial_epoch != 0:
         raise parser.error(
