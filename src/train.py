@@ -93,11 +93,19 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
                 else:
                     num_class = len(id2code)
                 # creating model with dimensions of pretrained model
+                # NOTE: do not set create_model to verbose=False
+                # --> need once run model.summary() -> otherwise model dimensions are not set
+                print("------------------------------")
+                print("-- Start: Dimensions of OLD Model: --")
+                print("------------------------------")
                 model_old = create_model(
                     model, num_class , nr_bands, tensor_shape, nr_filters=32, loss=loss_function,
                     alpha=tversky_alpha, beta=tversky_beta,
                     dropout_rate_input=dropout_rate_input,
-                    dropout_rate_hidden=dropout_rate_hidden, backbone=backbone, name=name, verbose=False)
+                    dropout_rate_hidden=dropout_rate_hidden, backbone=backbone, name=name)
+                print("----------------------------------")
+                print("-- End: Dimensions of OLD Model: --")
+                print("----------------------------------")
                 # Set weights of new model, with weights of pretrained model
                 # NOTE: model.layers returns list of model layers BUT not necessarily in the correct order
                 # Thus have to explicitely check for first and last layer index
