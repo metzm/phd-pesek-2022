@@ -34,12 +34,7 @@ def main(data_dir, model, in_weights_path, visualization_path, batch_size,
         os.path.join(data_dir, 'label_colors.txt'))
 
     # set TensorFlow seed
-    if seed is not None:
-        import sys
-        if int(tf.__version__.split('.')[1]) < 4:
-            tf.random.set_seed(seed)
-        else:
-            tf.keras.utils.set_random_seed(seed)
+    tf.random.set_seed(seed)
 
     # tinyunet: nr_filters=32
     model = create_model(model, len(id2code), nr_bands, tensor_shape,
@@ -128,7 +123,7 @@ if __name__ == '__main__':
         help='Path to the directory containing images and labels')
     parser.add_argument(
         '--model', type=str, default='U-Net',
-        choices=('U-Net', 'SegNet', 'DeepLab', 'FCN'),
+        choices=('U-Net', 'SegNet', 'DeepLab'),
         help='Model architecture')
     parser.add_argument(
         '--weights_path', type=str, default=None,
@@ -171,7 +166,7 @@ if __name__ == '__main__':
              'comma-separated (e.g. "1,2,6" to filter by classes 1, 2 and 6)')
     parser.add_argument(
         '--backbone', type=str, default=None,
-        choices=('ResNet50', 'ResNet101', 'ResNet152', 'VGG16'),
+        choices=('ResNet50', 'ResNet101', 'ResNet152'),
         help='Backbone architecture')
     parser.add_argument(
         '--ignore_masks', type=utils.str2bool, default=False,
