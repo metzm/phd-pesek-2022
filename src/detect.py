@@ -24,7 +24,10 @@ def main(data_dir, model, in_weights_path, visualization_path, batch_size,
     if ignore_masks is False:
         # check if labels are provided
         import glob
-        if len(glob.glob(os.path.join(data_dir, '*label.tif'))) == 0:
+        if len(
+            glob.glob(os.path.join(data_dir, '*label.tif'))
+            + glob.glob(os.path.join(data_dir, '*label.vrt'))
+            ) == 0:
             raise DatasetError('No labels provided in the dataset.')
 
     # get nr of bands
