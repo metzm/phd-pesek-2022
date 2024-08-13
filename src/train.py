@@ -92,6 +92,7 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
                     num_class = finetune_old_out_dim
                 else:
                     num_class = len(id2code)
+
                 # creating model with dimensions of pretrained model
                 # NOTE: do not set create_model to verbose=False
                 # --> need once run model.summary() -> otherwise model dimensions are not set
@@ -106,6 +107,9 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
                 print("----------------------------------")
                 print("-- End: Dimensions of OLD Model: --")
                 print("----------------------------------")
+                # load model weights of pretrained model
+                model_old.load_weights(in_weights_path)
+
                 # Set weights of new model, with weights of pretrained model
                 # NOTE: model.layers returns list of model layers BUT not necessarily in the correct order
                 # Thus have to explicitely check for first and last layer index
