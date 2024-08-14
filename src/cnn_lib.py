@@ -1214,8 +1214,14 @@ def get_tf_dataset(data_dir, batch_size=5, operation='train',
     # create variables useful throughout the entire class
     nr_samples = len(os.listdir(images_dir))
 
-    img_filelist = list(pathlib.Path(images_dir).glob('*.tif'))
-    mask_filelist = list(pathlib.Path(masks_dir).glob('*.tif'))
+    img_filelist = sorted(
+        list(pathlib.Path(images_dir).glob('*.tif'))
+        + list(pathlib.Path(images_dir).glob('*.vrt'))
+    )
+    mask_filelist = sorted(
+        list(pathlib.Path(masks_dir).glob('*.tif'))
+        + list(pathlib.Path(masks_dir).glob('*.vrt'))
+    )
 
     image_count = len(img_filelist)
     mask_count = len(mask_filelist)

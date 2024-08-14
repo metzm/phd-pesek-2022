@@ -44,9 +44,16 @@ def generate_dataset_structure(data_dir, tensor_shape=(256, 256),
     dir_names = train_val_determination(val_set_pct)
 
     # tile and write samples
-    source_images = sorted(glob.glob(os.path.join(data_dir, '*image.tif')))
-    for i in source_images:
-        tile(i, i.replace('image.tif', 'label.tif'), tensor_shape,
+    source_images = sorted(
+        glob.glob(os.path.join(data_dir, '*image.tif'))
+        + glob.glob(os.path.join(data_dir, '*image.vrt'))
+    )
+    source_label = sorted(
+        glob.glob(os.path.join(data_dir, '*label.tif'))
+        + glob.glob(os.path.join(data_dir, '*label.vrt'))
+    )
+    for i in range(len(source_images)):
+        tile(source_images[i], source_label[i], tensor_shape,
              filter_by_class, augment, dir_names, ignore_masks)
 
     # check if there are some training data
