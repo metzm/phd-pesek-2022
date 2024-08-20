@@ -16,7 +16,7 @@ from visualization import visualize_detections
 from cnn_exceptions import DatasetError
 
 
-def main(data_dir, model, in_weights_path, visualization_path, batch_size,
+def main(data_dir, label_colors, model, in_weights_path, visualization_path, batch_size,
          seed, tensor_shape, force_dataset_generation, fit_memory, val_set_pct,
          filter_by_class, backbone=None, ignore_masks=False):
     utils.print_device_info()
@@ -34,7 +34,7 @@ def main(data_dir, model, in_weights_path, visualization_path, batch_size,
     nr_bands = utils.get_nr_of_bands(data_dir)
 
     label_codes, label_names, id2code = utils.get_codings(
-        os.path.join(data_dir, 'label_colors.txt'))
+        os.path.join(data_dir, label_colors))
 
     # set TensorFlow seed
     tf.random.set_seed(seed)
@@ -125,6 +125,9 @@ if __name__ == '__main__':
         '--data_dir', type=str, required=True,
         help='Path to the directory containing images and labels')
     parser.add_argument(
+        "--label_colors", type=str, default="label_colors.txt",
+        help="Name of label colors txt file (located at top of --data-dir)")
+    parser.add_argument(
         '--model', type=str, default='U-Net',
         choices=('U-Net', 'SegNet', 'DeepLab'),
         help='Model architecture')
@@ -188,7 +191,7 @@ if __name__ == '__main__':
         raise parser.error(
             'Argument validation_set_percentage must be greater or equal to 0')
 
-    main(args.data_dir, args.model, args.weights_path, args.visualization_path,
+    main(args.data_dir, args.label_colors, args.model, args.weights_path, args.visualization_path,
          args.batch_size, args.seed, (args.tensor_height, args.tensor_width),
          args.force_dataset_generation, args.fit_dataset_in_memory,
          args.validation_set_percentage, args.filter_by_classes,

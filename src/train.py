@@ -83,7 +83,7 @@ def load_pretrained_model(model, id2code,
         # if model dimension did not chainged, load weights from complete model
         model_new.load_weights(in_weights_path)
 
-def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
+def main(operation, data_dir, output_dir, label_colors, model, model_fn, in_weights_path=None,
          visualization_path='/tmp', nr_epochs=1, initial_epoch=0, batch_size=1,
          loss_function='dice', seed=1, patience=100, tensor_shape=(256, 256),
          monitored_value='val_accuracy', force_dataset_generation=False,
@@ -100,7 +100,7 @@ def main(operation, data_dir, output_dir, model, model_fn, in_weights_path=None,
     nr_bands = utils.get_nr_of_bands(data_dir)
 
     label_codes, label_names, id2code = utils.get_codings(
-        os.path.join(data_dir, 'label_colors.txt'))
+        os.path.join(data_dir, label_colors))
 
     # set TensorFlow seed
     if seed is not None:
@@ -272,6 +272,9 @@ if __name__ == '__main__':
         '--data_dir', type=str, required=True,
         help='Path to the directory containing images and labels')
     parser.add_argument(
+        "--label_colors", type=str, default="label_colors.txt",
+        help="Name of label colors txt file (located at top of --data-dir)")
+    parser.add_argument(
         '--output_dir', type=str, required=True, default=None,
         help='Path where logs and the model will be saved')
     parser.add_argument(
@@ -399,7 +402,7 @@ if __name__ == '__main__':
             'Argument validation_set_percentage must be greater or equal to '
             '0 and smaller or equal than 1')
 
-    main(args.operation, args.data_dir, args.output_dir,
+    main(args.operation, args.data_dir, args.label_colors, args.output_dir,
          args.model, args.model_fn, args.weights_path, args.visualization_path,
          args.nr_epochs, args.initial_epoch, args.batch_size,
          args.loss_function, args.seed, args.patience,
