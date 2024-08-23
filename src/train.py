@@ -83,7 +83,7 @@ def load_pretrained_model(model, id2code,
         # if model dimension did not chainged, load weights from complete model
         model_new.load_weights(in_weights_path)
 
-def main(operation, data_dir, output_dir, label_colors, model, model_fn, in_weights_path=None,
+def main(operation, data_dir, label_colors, output_dir , model, model_fn, in_weights_path=None,
          visualization_path='/tmp', nr_epochs=1, initial_epoch=0, batch_size=1,
          loss_function='dice', seed=1, patience=100, tensor_shape=(256, 256),
          monitored_value='val_accuracy', force_dataset_generation=False,
