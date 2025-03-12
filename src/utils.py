@@ -3,6 +3,7 @@
 import os
 import glob
 import argparse
+import sys
 
 import tensorflow as tf
 
@@ -24,11 +25,20 @@ def get_codings(description_file):
 
 
 def get_nr_of_bands(data_dir):
-    """Get number of bands in the first *image.tif raster in a directory.
+    """Get number of bands in the first *image.tif or first *.vrt raster in a directory.
 
     :param data_dir: directory with images for training or detection
     """
+    # check for tif
     images = glob.glob(os.path.join(data_dir, '*image.tif'))
+    # if no tif found check for vrt
+    if not images:
+        images = glob.glob(os.path.join(data_dir, '*.vrt'))
+    # if still nothing found return error message
+    if not images:
+        sys.exit("ERROR: No *image.tif or *.vrt found on top level of training directory."
+                 "Needed to determine number of bands of input")
+
     dataset_image = gdal.Open(images[0], gdal.GA_ReadOnly)
     nr_bands = dataset_image.RasterCount
     dataset_image = None

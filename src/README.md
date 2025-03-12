@@ -11,10 +11,10 @@ The dataset is expected to be provided in the following structure:
 ```
 path/to/my/dataset/
 ├── label_colors.txt
-├── im1_image.tif
-├── im1_label.tif
-├── im2_image.tif
-├── im2_label.tif
+├── im1_image.tif/.vrt
+├── im1_label.tif/.vrt
+├── im2_image.tif/.vrt
+├── im2_label.tif/.vrt
 └── ...
 ```
 
@@ -43,24 +43,24 @@ directories.
 ```
 path/to/my/dataset/
 ├── label_colors.txt
-├── im1_image.tif
-├── im1_label.tif
-├── im2_image.tif
-├── im2_label.tif
+├── im1_image.tif/.vrt
+├── im1_label.tif/.vrt
+├── im2_image.tif/.vrt
+├── im2_label.tif/.vrt
 ├── train_images
-│   ├── image_0.tif
-│   ├── image_1.tif
-│   ├── image_2.tif
-│   └── image_4.tif
+│   ├── image_0.tif/.vrt
+│   ├── image_1.tif/.vrt
+│   ├── image_2.tif/.vrt
+│   └── image_4.tif/.vrt
 ├── train_masks
-│   ├── image_0.tif
-│   ├── image_1.tif
-│   ├── image_2.tif
-│   └── image_4.tif
+│   ├── image_0.tif/.vrt
+│   ├── image_1.tif/.vrt
+│   ├── image_2.tif/.vrt
+│   └── image_4.tif/.vrt
 ├── val_images
-│   └── image_3.tif
+│   └── image_3.tif/.vrt
 └── val_masks
-    └── image_3.tif
+    └── image_3.tif/.vrt
 ```
 
 ## Training

@@ -206,7 +206,7 @@ def visualize_detections(images, ground_truths, detections, id2code,
 
         # THE DETECTION TIF IMAGE SECTION
 
-        out = driver.Create(os.path.join(out_dir, f'{geoinfos[i][0]}'),
+        out = driver.Create(os.path.join(out_dir, f"{geoinfos[i][0].replace('.vrt','.tif')}"),
                             np.shape(detections)[2],
                             np.shape(detections)[1],
                             1,
